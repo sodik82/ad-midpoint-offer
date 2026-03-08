@@ -1,6 +1,6 @@
 # Project Plan — AD to midPoint Password Sync
 
-**Version:** 0.1
+**Version:** 0.2
 **Date:** 2026-03-08
 **Status:** Internal draft
 
@@ -19,7 +19,7 @@ Deliver a production-ready, open-source (EUPL 1.2) solution that captures AD pas
 Foundation: repository structure, licensing, and toolchain configuration before any implementation begins.
 
 ### E1-S1: Initialize Repository Structure
-Create the full folder hierarchy as defined in the architecture design (`src/filter-dll/`, `src/sync-service/`, `src/installer/`, `tests/`, `tools/mock-midpoint/`, `docs/`, `.github/workflows/`). Add `.gitignore` covering MSVC build outputs, .NET `bin/obj`, and WiX intermediates. Add `.editorconfig` enforcing consistent indentation across C++, C#, and WiX XML files.
+Create the full folder hierarchy as defined in the architecture design (`src/filter-dll/`, `src/sync-service/`, `src/installer/`, `tests/`, `tools/mock-midpoint/`, `docker/`, `docs/`, `.github/workflows/`). Add `.gitignore` covering MSVC build outputs, .NET `bin/obj`, WiX intermediates, and docker volume data. Add `.editorconfig` enforcing consistent indentation across C++, C#, WiX XML, and YAML files.
 
 ### E1-S2: EUPL 1.2 Licensing Setup
 Add the full EUPL 1.2 text as `LICENSE` in the repository root. Create `NOTICE` listing third-party dependencies and their licences (Serilog: Apache 2.0; Google Test: BSD-3; WiX Toolset: MS-RL — verify compatibility). Create a reusable EUPL 1.2 file-header template (comment block) for use in all `.cpp`, `.h`, and `.cs` files. Document the header requirement in the contributing section of the developer guide.
@@ -28,7 +28,10 @@ Add the full EUPL 1.2 text as `LICENSE` in the repository root. Create `NOTICE` 
 Create `README.md` with: project overview, architecture summary diagram link, quick-start installation command, EUPL 1.2 licence badge, supported OS versions badge, and link to the admin guide. Keep it concise — detailed documentation goes in `docs/`.
 
 ### E1-S4: Dev Environment Documentation (Prerequisite Collection)
-Document the exact prerequisites for the local development environment: Visual Studio 2022 (or Build Tools) with Desktop C++ workload, .NET SDK 8.0+, WiX Toolset v4 CLI, CMake 3.21+, Git. Obtain from the customer the midPoint resource definition XML files and schema configurations needed to replicate the target API behaviour in the local mock environment (per specification section 7).
+Document the exact prerequisites for the local development environment: Visual Studio 2022 (or Build Tools) with Desktop C++ workload, .NET SDK 8.0+, WiX Toolset v4 CLI, CMake 3.21+, Git, Docker Desktop (for the real midPoint instance). Obtain from the customer the midPoint resource definition XML files and schema configurations needed to configure the local real midPoint instance (per specification section 7).
+
+### E1-S5: docker-compose Setup for Real midPoint
+Create `docker/docker-compose.yml` that spins up a real midPoint instance for local development and E2E testing. Import the customer-provided midPoint resource definition XML files and schema configurations into the container on startup (via mounted init directory or a startup script). Document the `docker compose up` workflow in the build guide, including: how to reset midPoint state, how to verify the `notifyChange` endpoint is reachable, and how to inspect midPoint audit logs to confirm events were received.
 
 ---
 
@@ -88,10 +91,10 @@ Implement `Logging/LoggingConfiguration.cs`: configure Serilog in code (no `apps
 
 ## Epic 4 — Mock midPoint Tool
 
-Standalone mock REST endpoint for integration testing and local development, usable without a real midPoint instance.
+Lightweight mock REST endpoint used exclusively in CI integration tests where spinning up a real midPoint container is not practical. Local development and E2E testing use the real midPoint instance from E1-S5 instead.
 
-### E4-S1: Mock midPoint REST Endpoint
-Implement `tools/mock-midpoint/MockMidPoint.csproj`: minimal ASP.NET Core stub (or WireMock.NET runner) that exposes the `notifyChange` endpoint. Configurable via command-line args to return HTTP 200, 500, or 401, enabling scenario-driven integration testing. Log all received requests (excluding password values) to stdout. Document usage in the build guide.
+### E4-S1: Mock midPoint REST Endpoint (CI Integration Tests Only)
+Implement `tools/mock-midpoint/MockMidPoint.csproj`: minimal ASP.NET Core stub (or WireMock.NET runner) that exposes the `notifyChange` endpoint. Configurable via command-line args to return HTTP 200, 500, or 401, enabling scenario-driven fault injection in the CI integration test pipeline. Log all received requests (excluding password values) to stdout. Document usage in the build guide, clearly noting its CI-only scope.
 
 ---
 
@@ -153,8 +156,8 @@ Create `tests/sync-service-tests/`. Test cases: **RetryEngine** — verify expon
 ### E7-S3: Integration Tests
 Create integration test category within `tests/sync-service-tests/`. Scenarios: happy path — inject `.evt` file → verify mock midPoint received the expected `notifyChange` POST with correct username and domain; transient failure — mock returns 500 → verify retry with exponential backoff; permanent failure — mock returns 401 → verify event moved to `failed\` without retry; retry exhaustion — configure short `retryTimeoutSeconds` → verify event moved to `failed\` after timeout; midPoint unavailable then recovers — stop mock, inject event, restart mock → verify eventual delivery.
 
-### E7-S4: E2E PowerShell Scripts
-Create `tests/e2e/`: `Invoke-HappyPath.ps1` — force a password change for a test AD account, wait, verify the mock midPoint received `notifyChange` with the correct username; `Invoke-BurstTest.ps1` — bulk-set `pwdLastSet=0` on 1000 test accounts, trigger password changes, monitor queue depth and delivery count; `helpers/MockMidPoint.ps1` — helper to start/stop the mock midPoint tool from PowerShell.
+### E7-S4: E2E PowerShell Scripts (Against Real midPoint)
+Create `tests/e2e/`: `Invoke-HappyPath.ps1` — force a password change for a test AD account, wait, verify the real midPoint (docker-compose instance) received `notifyChange` with the correct username by querying midPoint audit logs or a dedicated verification endpoint; `Invoke-BurstTest.ps1` — bulk-set `pwdLastSet=0` on 1000 test accounts, trigger password changes, monitor queue depth and delivery count against real midPoint; `helpers/StartMidPoint.ps1` — helper to start/stop/reset the docker-compose midPoint stack from PowerShell before and after E2E runs.
 
 ---
 
@@ -187,7 +190,7 @@ All written deliverables required by the specification.
 Cover: installation (MSI parameters, silent install examples for GPO and SCCM); configuration (every `config.json` parameter with type, default, valid range, and example); credential rotation (how to update the midPoint password after initial setup — re-run installer or manual DPAPI re-encrypt procedure); log interpretation (what each log event type means, how to correlate `eventId` across DLL Event Log entries and service log files); troubleshooting (DLL not loaded, service not starting, midPoint unreachable, queue growing, `failed\` accumulating); checking status (`reg query` for Notification Packages, `sc query` for service status, Process Explorer); purge procedure for complete post-uninstall cleanup.
 
 ### E9-S2: Build and Developer Guide (`docs/build-guide.md`)
-Cover: prerequisites (exact versions of VS 2022, .NET SDK, WiX v4, CMake, Git); local build commands (step-by-step `cmake`, `dotnet build`, `wix build`); local dev environment options (Option A: real AD DC VM + real or mock midPoint; Option B: mock midPoint only, no DC required); running tests locally (`ctest`, `dotnet test`, mock midPoint startup); contributing (branch naming, PR process, code style, mandatory EUPL 1.2 header for new files).
+Cover: prerequisites (exact versions of VS 2022, .NET SDK, WiX v4, CMake, Git, Docker Desktop); local build commands (step-by-step `cmake`, `dotnet build`, `wix build`); local dev environment options (Option A: real AD DC VM + real midPoint via docker-compose — full stack; Option B: real midPoint via docker-compose only, no DC — service-level development without DLL); running the real midPoint stack (`docker compose up`, reset procedure, verifying the `notifyChange` endpoint); running tests locally (`ctest`, `dotnet test`); running E2E scripts against the docker-compose midPoint instance; running CI integration tests against the mock (fault-injection scenarios); contributing (branch naming, PR process, code style, mandatory EUPL 1.2 header for new files).
 
 ### E9-S3: Support Proposal (Separate Document)
 Prepare a separate quotation document for 12 months of post-deployment maintenance as required by specification section 8. Cover: security patches for discovered vulnerabilities; Windows Server update compatibility testing (new Windows Update releases, future WS versions); bug fixes with defined SLA response times; scope boundaries (what is and is not covered). Deliver as a separate commercial document, not part of the open-source repository.
@@ -217,6 +220,7 @@ Tag `v1.0.0` in Git, triggering the release pipeline. Verify the GitHub Release 
 | | E1-S2 | Add EUPL 1.2 LICENSE, NOTICE, and file-header template |
 | | E1-S3 | Create README.md with overview, badges, quick start |
 | | E1-S4 | Document dev prerequisites; obtain midPoint XML configs from customer |
+| | E1-S5 | docker-compose setup for real midPoint (local dev and E2E) |
 | **E2 — Filter DLL** | E2-S1 | CMake project setup with MSVC hardening flags |
 | | E2-S2 | Implement DllMain and three LSA exports |
 | | E2-S3 | PasswordChangeNotify: JSON payload build, SecureZeroMemory, RAII |
@@ -231,7 +235,7 @@ Tag `v1.0.0` in Git, triggering the release pipeline. Verify the GitHub Release 
 | | E3-S6 | Thread pool gate: SemaphoreSlim, configurable parallelism |
 | | E3-S7 | MidPoint REST client: HttpClient, Basic Auth, TLS 1.3/1.2 policy |
 | | E3-S8 | Serilog structured logging: rolling file, JSON format, configurable level |
-| **E4 — Mock midPoint** | E4-S1 | Mock REST endpoint for integration testing and local development |
+| **E4 — Mock midPoint** | E4-S1 | Mock REST endpoint for CI integration tests only (fault injection) |
 | **E5 — MSI Installer** | E5-S1 | WiX v4 project setup, MajorUpgrade configuration |
 | | E5-S2 | ProgramData directory tree with correct NTFS ACLs |
 | | E5-S3 | DLL install to System32; append-safe Notification Packages registry write |
@@ -246,14 +250,14 @@ Tag `v1.0.0` in Git, triggering the release pipeline. Verify the GitHub Release 
 | **E7 — Automated Tests** | E7-S1 | C++ Google Test suite: queue writer, DPAPI, atomic rename, error paths |
 | | E7-S2 | C# xUnit suite: retry engine, REST client, config, DPAPI, queue reader |
 | | E7-S3 | Integration tests: happy path, transient/permanent failure, retry exhaustion |
-| | E7-S4 | E2E PowerShell scripts: happy path, burst test (1000 passwords) |
+| | E7-S4 | E2E PowerShell scripts against real midPoint (docker-compose): happy path, burst test |
 | **E8 — Manual Testing** | E8-S1 | OS compatibility test on WS 2016, 2019, 2022, 2025 VMs |
 | | E8-S2 | Windows Defender compatibility test |
 | | E8-S3 | Burst load acceptance test (1000 simultaneous password changes) |
 | | E8-S4 | Upgrade and uninstall scenario test |
 | | E8-S5 | Security review checklist (no passwords in logs, DPAPI context, TLS) |
 | **E9 — Documentation** | E9-S1 | Administrator Guide: install, config, credential rotation, troubleshooting |
-| | E9-S2 | Build and Developer Guide: prerequisites, build steps, contributing |
+| | E9-S2 | Build and Developer Guide: prerequisites, build steps, docker-compose midPoint, contributing |
 | | E9-S3 | Support Proposal: 12-month post-deployment maintenance quotation |
 | | E9-S4 | EUPL 1.2 header compliance pass across all source files |
 | **E10 — Release** | E10-S1 | Changelog finalisation and version management |

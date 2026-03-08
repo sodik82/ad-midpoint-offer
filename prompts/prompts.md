@@ -46,6 +46,8 @@ At the end - add summarizing table with epics - stories - brief description.
 Write down the project plan to `internal-notes/project-plan.md`
 ```
 
+Iterate on design decissions while project plan looks reasonable (it contains everything, it is properly structured)
+
 # Offer
 
 TBD - don't forget to add all assumptions to offer
