@@ -11,6 +11,8 @@ Consider things like
 Write the questions into `internal-notes/initial-analysis-questions.md`
 ```
 
+Then write answers directly to document with `Answer:` prefix
+
 # Initial design phase
 
 ```
@@ -27,3 +29,23 @@ If there are multiple reasonable alternatives in design - write up to 3 most rel
 
 Write the result into `internal-notes/initial-design.md` (optionally with mermaid diagrams when suitable)
 ```
+
+# Project plan
+
+Write `internal-notes/design-decisions.md` - to select alternatives or give another design instructions
+
+```
+Based on `internal-notes/initial-design.md` and `internal-notes/design-decisions.md` make project plan where you plan epics and stories to be implemented to fully deliver the solution.
+
+Please check also `official-input/specification.md` to cross-check if something was forgotten.
+
+Don't forget to add also non-implementation stories (like final testing, writing documentation).
+
+At the end - add summarizing table with epics - stories - brief description.
+
+Write down the project plan to `internal-notes/project-plan.md`
+```
+
+# Offer
+
+TBD - don't forget to add all assumptions to offer
