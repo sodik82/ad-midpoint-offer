@@ -48,6 +48,19 @@ Write down the project plan to `internal-notes/project-plan.md`
 
 Iterate on design decissions while project plan looks reasonable (it contains everything, it is properly structured)
 
+# Estimate
+
+```
+Based on `internal-notes/project-plan.md` prepare estimates for each epic.
+Read also `internal-notes/initial-design.md` and `internal-notes/design-decisions.md` so that you understand more details.
+
+* Make estimates in man-days assuming it will be done be mid to senior developer (mix of such developers)
+* If epic is too big, split estimate into smaller parts
+* Use fibonachi numbers for estimates 0,1,2,3,5,8,13,21 (anything more is too big)
+
+Write down the estimates to the `internal-notes/estimates.md` in form of table.
+```
+
 # Offer
 
 TBD - don't forget to add all assumptions to offer
